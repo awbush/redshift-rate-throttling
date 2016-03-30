@@ -40,8 +40,9 @@ case $hostos in
     sed_regex_flag="-r"
 esac
 jq -c '.Records[]
-| select(.eventSource == "redshift.amazonaws.com")
+| select(.eventSource == "redshift.amazonaws.com" or .eventSource == "elasticmapreduce.amazonaws.com")
 | [
+    .eventSource,
     .eventName,
     .eventTime,
     .userIdentity.type,
