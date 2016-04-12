@@ -4,9 +4,11 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 . ${DIR}/config.sh
 hostos=`uname -s`
 
-echo "Cleaning data dir ===================================="
-test -d _data && rm -r ${DATA_DIR}
 mkdir -p ${DATA_DIR}
+
+# Only process and import data `aws s3 sync` downloads
+STATE_FILE=.last-update
+touch ${STATE_FILE}
 
 echo "Downloading data ===================================="
 for i in 0 1 2; do
@@ -27,9 +29,6 @@ for i in 0 1 2; do
   aws s3 sync ${s3_path} ${DATA_DIR}/ --exclude='*' --include=${s3_include}
 done
 
-echo "Decompressing data ===================================="
-yes n | gunzip -k ${DATA_DIR}/*.gz
-
 echo "Converting data to csv ===================================="
 # Account for variance in `sed` flags to activate extended regex
 case $hostos in
@@ -39,21 +38,14 @@ case $hostos in
   *)
     sed_regex_flag="-r"
 esac
-jq -c '.Records[]
-| select(.eventSource == "redshift.amazonaws.com" or .eventSource == "elasticmapreduce.amazonaws.com")
-| [
-    .eventSource,
-    .eventName,
-    .eventTime,
-    .userIdentity.type,
-    .userIdentity.userName,
-    .sourceIPAddress,
-    .userAgent
-  ]
-' ${DATA_DIR}/*.json | sed ${sed_regex_flag} 's/(^\[|\]$)//g' > ${CSV_FILE}
+find _data -cnewer ${STATE_FILE} -name '*.gz' \
+  | xargs -L1 bash -c 'gunzip -c $0 | jq -c -f '${DIR}/jq-filter.txt' | sed '${sed_regex_flag}" 's/(^\[|\]$)//g'" \
+  > ${CSV_FILE}
+
 
 echo "Importing csv to database ===================================="
-cat ${DIR}/schema/cloudtrail.sql | sqlite3 ${DB_FILE}
+test -f ${DB_FILE} || cat ${DIR}/schema/cloudtrail-init.sql | sqlite3 ${DB_FILE}
+cat ${DIR}/schema/cloudtrail-import.sql | sqlite3 ${DB_FILE}
 
 ${DIR}/run-report.sh ${DIR}/"reports/Top users over the last few hours.sql"
 

@@ -9,6 +9,3 @@ CREATE TABLE cloudtrail (
   sourceIPAddress text,
   userAgent text
 );
-
-.mode csv
-.import _data/all.csv cloudtrail

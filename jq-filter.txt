@@ -1,0 +1,11 @@
+.Records[]
+| select(.eventSource == "redshift.amazonaws.com" or .eventSource == "elasticmapreduce.amazonaws.com")
+| [
+    .eventSource,
+    .eventName,
+    .eventTime,
+    .userIdentity.type,
+    .userIdentity.userName,
+    .sourceIPAddress,
+    .userAgent
+  ]
